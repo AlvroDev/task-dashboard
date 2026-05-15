@@ -1,0 +1,29 @@
+import { httpClient } from "@/lib/http";
+import type { Task, TaskFormValues, TodosResponse, PaginationParams } from "@/types";
+
+export const tasksService = {
+  getAll: async ({ limit, skip }: PaginationParams): Promise<TodosResponse> => {
+    const { data } = await httpClient.get(`/todos?limit=${limit}&skip=${skip}`);
+    return data;
+  },
+
+  getById: async (id: number): Promise<Task> => {
+    const { data } = await httpClient.get(`/todos/${id}`);
+    return data;
+  },
+
+  create: async (payload: TaskFormValues): Promise<Task> => {
+    const { data } = await httpClient.post("/todos/add", payload);
+    return data;
+  },
+
+  update: async (id: number, payload: Partial<TaskFormValues & { completed: boolean }>): Promise<Task> => {
+    const { data } = await httpClient.put(`/todos/${id}`, payload);
+    return data;
+  },
+
+  remove: async (id: number): Promise<Task> => {
+    const { data } = await httpClient.delete(`/todos/${id}`);
+    return data;
+  },
+};

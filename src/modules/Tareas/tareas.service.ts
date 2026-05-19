@@ -1,9 +1,9 @@
 import { httpClient } from "@/lib/http";
-import type { Task, TaskFormValues, TodosResponse, PaginationParams } from "@/types";
+import type { Task, TaskFormValues, TodosResponse} from "@/types";
 
 export const tasksService = {
-  getAll: async ({ limit, skip }: PaginationParams): Promise<TodosResponse> => {
-    const { data } = await httpClient.get(`/todos?limit=${limit}&skip=${skip}`);
+  getAll: async (): Promise<TodosResponse> => {
+    const {data} = await httpClient.get('/todos?limit=250&skip=0');
     return data;
   },
 

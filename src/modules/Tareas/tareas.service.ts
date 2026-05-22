@@ -1,5 +1,5 @@
 import { httpClient } from "@/lib/http";
-import type { Task, TaskFormValues, TodosResponse} from "@/types";
+import type { Task, TaskFormValues, TodosResponse, Priority, TaskStatus } from "@/types";
 
 export const tasksService = {
   getAll: async (): Promise<TodosResponse> => {
@@ -17,7 +17,14 @@ export const tasksService = {
     return data;
   },
 
-  update: async (id: number, payload: Partial<TaskFormValues & { completed: boolean }>): Promise<Task> => {
+  update: async (
+    id: number, 
+    payload: Partial<TaskFormValues & { 
+      completed: boolean;
+      status?: TaskStatus;
+      priority?: Priority;
+    }>
+  ): Promise<Task> => {
     const { data } = await httpClient.put(`/todos/${id}`, payload);
     return data;
   },

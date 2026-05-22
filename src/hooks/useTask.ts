@@ -4,7 +4,7 @@ import type { TaskFormValues } from "@/types";
 import {useQuery} from "@tanstack/react-query";
 import type { Filters }  from "@/types/filters";
 
-export const useDeleteTodo = () => {
+export const useDeleteTask = () => {
     const queryClient = useQueryClient();
     
     return useMutation({
@@ -15,7 +15,7 @@ export const useDeleteTodo = () => {
     });
 }
 
-export const useUpdateTodo = () => {
+export const useUpdateTask = () => {
     const queryClient = useQueryClient();
 
     return useMutation({
@@ -26,7 +26,7 @@ export const useUpdateTodo = () => {
     });
 }
 
-export const useTodos = (filters: Filters) => {
+export const useTasks = (filters: Filters) => {
     return useQuery({
         queryKey: ['todos', filters],
         queryFn: async () => {

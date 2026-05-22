@@ -1,4 +1,4 @@
-import { useUpdateTodo } from "@/hooks/UseTodos";
+import { useUpdateTodo } from "@/hooks/useTask";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import type { Task } from "@/types";
 import { Button } from "@/components/ui/button";

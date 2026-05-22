@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useDeleteTodo } from "@/hooks/UseTodos";
+import { useDeleteTodo } from "@/hooks/useTask";
 
 export default function DeleteTaskModal({
   isOpen,

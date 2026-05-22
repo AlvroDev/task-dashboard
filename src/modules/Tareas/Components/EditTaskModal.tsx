@@ -1,7 +1,8 @@
 import { useUpdateTodo } from "@/hooks/useTask";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import type { Task } from "@/types";
+import type { Task, Priority, TaskStatus } from "@/types";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export default function EditTaskModal({
     isOpen,
@@ -12,65 +13,162 @@ export default function EditTaskModal({
     onOpenChange: (open: boolean) => void;
     task: Task;
 }) {
-    const { mutate } = useUpdateTodo();
+    const { mutate, isPending } = useUpdateTodo();
+    
+    const [formData, setFormData] = useState({
+        title: task.todo,
+        description: task.description,
+        priority: task.priority as Priority,
+        status: task.status as TaskStatus,
+        completed: task.completed,
+        userId: task.userId
+    });
 
-    const handleUpdate = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, type, value, checked } = e.currentTarget as any;
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
+    };
+
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const title = formData.get('title') as string;
-        const description = formData.get('description') as string;
-        const completed = formData.get('completed') === 'on';
-
-        mutate({ id: task.id, payload: { todo: title, description, completed } });
+        
+        mutate({
+            id: task.id,
+            payload: {
+                todo: formData.title,
+                description: formData.description,
+                priority: formData.priority,
+                userId: formData.userId,
+                completed: formData.completed,
+                createdAt: task.createdAt
+            }
+        });
         onOpenChange(false);
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Editar Tarea</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleUpdate}>
-                    <div className="mb-4">
-                        <label htmlFor="title" className="block text-sm font-medium text-gray-700">Título</label>
+                
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Título */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Título
+                        </label>
                         <input
                             type="text"
                             name="title"
-                            defaultValue={task.todo}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            value={formData.title}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            required
                         />
                     </div>
-                    <div className="mb-4">
-                        <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
+
+                    {/* Descripción */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Descripción
+                        </label>
                         <textarea
                             name="description"
-                            defaultValue={task.description}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            value={formData.description}
+                            onChange={handleChange}
+                            rows={3}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                     </div>
-                    <div className="mb-4">
-                        <label htmlFor="completed" className="block text-sm font-medium text-gray-700">Completada</label>
+
+                    {/* Grid para campos menores */}
+                    <div className="grid grid-cols-2 gap-4">
+                        {/* Prioridad */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Prioridad
+                            </label>
+                            <select
+                                name="priority"
+                                value={formData.priority}
+                                onChange={handleChange}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                                <option value="low">Baja</option>
+                                <option value="medium">Media</option>
+                                <option value="high">Alta</option>
+                            </select>
+                        </div>
+
+                        {/* Usuario ID */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Usuario ID
+                            </label>
+                            <input
+                                type="number"
+                                name="userId"
+                                value={formData.userId}
+                                onChange={handleChange}
+                                min="1"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Estado */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Estado
+                        </label>
+                        <select
+                            name="status"
+                            value={formData.status}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="pending">Pendiente</option>
+                            <option value="in-progress">En Progreso</option>
+                            <option value="completed">Completada</option>
+                        </select>
+                    </div>
+
+                    {/* Checkbox Completada */}
+                    <div className="flex items-center">
                         <input
                             type="checkbox"
                             name="completed"
-                            defaultChecked={task.completed}
-                            className="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            checked={formData.completed}
+                            onChange={handleChange}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                            id="completed"
                         />
+                        <label htmlFor="completed" className="ml-2 text-sm font-medium text-gray-700 cursor-pointer">
+                            Marcar como completada
+                        </label>
                     </div>
-                    <DialogFooter>
+
+                    {/* Botones */}
+                    <DialogFooter className="flex justify-between pt-4">
                         <Button
                             type="button"
                             onClick={() => onOpenChange(false)}
-                            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            className="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg"
+                            disabled={isPending}
                         >
                             Cancelar
                         </Button>
                         <Button
                             type="submit"
-                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg disabled:opacity-50"
+                            disabled={isPending}
                         >
-                            Actualizar
+                            {isPending ? 'Guardando...' : 'Guardar Cambios'}
                         </Button>
                     </DialogFooter>
                 </form>

@@ -1,5 +1,6 @@
-import { useTodos } from "@/hooks/UseTodos";
-import { useUpdateTodo } from "@/hooks/UseTodos";
+
+import { useTasks } from "@/hooks/useTask";
+import { useUpdateTask } from "@/hooks/useTask";
 import type { Filters } from "@/types/filters";
 import type { Task } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -8,14 +9,14 @@ import DeleteTaskModal from "@/modules/Tareas/Components/DeleteTaskModal";
 import { useState } from "react";
 
 export default function TaskList({ filters }: { filters: Filters }) {
-    const { data: tasks, isLoading, error } = useTodos(filters);
-    const { mutate: updateTodo } = useUpdateTodo();
+    const { data: tasks, isLoading, error } = useTasks(filters);
+    const { mutate: updateTask } = useUpdateTask();
     
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null);
 
     const handleToggleComplete = (task: Task) => {
-        updateTodo({
+        updateTask({
             id: task.id,
             payload: { 
                 todo: task.todo,
@@ -29,7 +30,7 @@ export default function TaskList({ filters }: { filters: Filters }) {
     };
 
     const handleStatusChange = (task: Task, newStatus: 'pending' | 'in-progress' | 'completed') => {
-        updateTodo({
+        updateTask({
             id: task.id,
             payload: {
                 todo: task.todo,
@@ -79,19 +80,6 @@ export default function TaskList({ filters }: { filters: Filters }) {
                 return 'Baja';
             default:
                 return priority;
-        }
-    };
-
-    const getStatusLabel = (status: string) => {
-        switch (status) {
-            case 'pending':
-                return 'Pendiente';
-            case 'in-progress':
-                return 'En Progreso';
-            case 'completed':
-                return 'Completada';
-            default:
-                return status;
         }
     };
 

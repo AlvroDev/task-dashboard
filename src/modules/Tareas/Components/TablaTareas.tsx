@@ -1,192 +1,185 @@
-// ─── CORRECCIONES ─────────────────────────────────────────────────────────────
-// 1. Mostraba "ID: X" en lugar del nombre real del usuario → resuelve con prop usuarios
-// 2. Faltaba columna "Fecha de creación" (requerimiento del challenge)
-// 3. Badges de prioridad y estado inline → extraídos a BadgePrioridad / BadgeEstado
-// 4. Paginación server-side incorrecta → paginación local sobre los datos filtrados
-// ─────────────────────────────────────────────────────────────────────────────
-
-import { useState } from "react";
-import type { Task, User } from "@/types";
-import { BadgePrioridad } from "./BadgePrioridad";
-import { BadgeEstado } from "./BadgeEstado";
+import type { Task } from "@/types";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  Circle,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 10;
+// ─── Config visual de prioridades ─────────────────────────────────────────────
+const CONFIG_PRIORIDAD = {
+  high:   { label: "Alta",  clase: "bg-red-500/20 text-red-400 border border-red-500/30" },
+  medium: { label: "Media", clase: "bg-orange-500/20 text-orange-400 border border-orange-500/30" },
+  low:    { label: "Baja",  clase: "bg-teal-500/20 text-teal-400 border border-teal-500/30" },
+} as const;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function resolverNombreUsuario(userId: number, usuarios: User[]): string {
-  const usuario = usuarios.find((u) => u.id === userId);
-  return usuario ? `${usuario.firstName} ${usuario.lastName}` : `#${userId}`;
-}
-
-function formatearFecha(fecha: string): string {
+function formatearFecha(fecha?: string): string {
   if (!fecha) return "—";
-  try {
-    return new Date(fecha).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return fecha;
-  }
-}
-
-// ─── Skeleton de fila ─────────────────────────────────────────────────────────
-
-function FilaSkeleton() {
-  return (
-    <tr className="border-b border-slate-100">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <td key={i} className="px-4 py-3">
-          <div className="h-3.5 bg-slate-100 rounded animate-pulse" />
-        </td>
-      ))}
-    </tr>
-  );
+  return new Date(fecha).toLocaleDateString("es-AR", {
+    month: "short", day: "numeric", year: "numeric",
+  });
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
-
 interface PropsTablaTareas {
   tareas: Task[];
-  usuarios: User[];
-  cargando: boolean;
-  error: Error | null;
-  alEditar: (tarea: Task) => void;
-  alEliminar: (id: number) => void;
+  mapaUsuarios: Map<number, string>;
+  onEditar: (tarea: Task) => void;
+  onEliminar: (tarea: Task) => void;
+  onToggleEstado: (tarea: Task) => void;
+  pagina: number;
+  totalPaginas: number;
+  onCambiarPagina: (pagina: number) => void;
+  actualizando: boolean;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
-
 export function TablaTareas({
   tareas,
-  usuarios,
-  cargando,
-  error,
-  alEditar,
-  alEliminar,
+  mapaUsuarios,
+  onEditar,
+  onEliminar,
+  onToggleEstado,
+  pagina,
+  totalPaginas,
+  onCambiarPagina,
+  actualizando,
 }: PropsTablaTareas) {
-  const [pagina, setPagina] = useState(0);
 
-  const totalPaginas = Math.ceil(tareas.length / PAGE_SIZE);
-  const filasVisibles = tareas.slice(pagina * PAGE_SIZE, (pagina + 1) * PAGE_SIZE);
-  const desde = pagina * PAGE_SIZE + 1;
-  const hasta = Math.min((pagina + 1) * PAGE_SIZE, tareas.length);
-
-  // Resetear a página 0 cuando cambian los datos filtrados
-  // (useEffect no necesario — la paginación se recalcula en cada render)
+  if (tareas.length === 0) {
+    return (
+      <div className="rounded-lg border border-border/50 bg-card p-8 text-center">
+        <p className="text-muted-foreground text-sm">
+          No se encontraron tareas con los filtros aplicados.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      {/* ── Tabla ─────────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+      <div className="rounded-lg border border-border/50 bg-card overflow-hidden">
         <div className="w-full overflow-x-auto">
           <table className="w-full text-sm text-left border-collapse">
 
-            {/* Encabezados */}
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-muted/50 border-b border-border/50">
               <tr>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider w-16">ID</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Título</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Descripción</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Prioridad</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Estado</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Asignado a</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Creación</th>
-                <th className="px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider text-right">Acciones</th>
+                {["ID", "Título", "Descripción", "Prioridad", "Estado", "Asignado a", "Creación", ""].map((h, i) => (
+                  <th
+                    key={i}
+                    className={cn(
+                      "px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider",
+                      h === "Descripción" && "hidden md:table-cell",
+                      h === "Asignado a"  && "hidden lg:table-cell",
+                      h === "Creación"    && "hidden xl:table-cell",
+                      h === ""            && "w-14",
+                    )}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
 
-            {/* Cuerpo */}
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border/30">
+              {tareas.map((tarea) => (
+                <tr key={tarea.id} className="group hover:bg-muted/30 transition-colors">
 
-              {/* Estado: cargando */}
-              {cargando && Array.from({ length: 5 }).map((_, i) => (
-                <FilaSkeleton key={i} />
-              ))}
-
-              {/* Estado: error */}
-              {error && !cargando && (
-                <tr>
-                  <td colSpan={8} className="text-center py-12 text-red-500 text-sm">
-                    Error al cargar las tareas: {error.message}
-                  </td>
-                </tr>
-              )}
-
-              {/* Estado: sin datos */}
-              {!cargando && !error && tareas.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="text-center py-16 text-slate-400 text-sm">
-                    No se encontraron tareas con los filtros aplicados.
-                  </td>
-                </tr>
-              )}
-
-              {/* Datos */}
-              {!cargando && !error && filasVisibles.map((tarea) => (
-                <tr key={tarea.id} className="hover:bg-slate-50/60 transition-colors">
-
-                  {/* ID */}
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                     #{tarea.id}
                   </td>
 
-                  {/* Título */}
                   <td className="px-4 py-3 max-w-45">
-                    <span className="font-medium text-slate-900 line-clamp-2 block">
+                    <span className={cn(
+                      "font-medium line-clamp-1 block",
+                      tarea.completed && "line-through text-muted-foreground"
+                    )}>
                       {tarea.todo}
                     </span>
                   </td>
 
-                  {/* Descripción */}
-                  <td className="px-4 py-3 max-w-50">
-                    <span className="text-slate-500 text-xs line-clamp-2 block">
+                  <td className="hidden md:table-cell px-4 py-3 max-w-50">
+                    <span className="text-xs text-muted-foreground line-clamp-2 block">
                       {tarea.description || "—"}
                     </span>
                   </td>
 
-                  {/* Prioridad */}
                   <td className="px-4 py-3">
-                    <BadgePrioridad prioridad={tarea.priority} />
+                    {tarea.priority && (
+                      <span className={cn(
+                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold",
+                        CONFIG_PRIORIDAD[tarea.priority].clase
+                      )}>
+                        {CONFIG_PRIORIDAD[tarea.priority].label}
+                      </span>
+                    )}
                   </td>
 
-                  {/* Estado */}
                   <td className="px-4 py-3">
-                    <BadgeEstado completada={tarea.completed} estado={tarea.status} />
+                    <button
+                      onClick={() => onToggleEstado(tarea)}
+                      disabled={actualizando}
+                      className="flex items-center gap-1.5 text-sm transition-colors hover:text-primary disabled:opacity-50 cursor-pointer"
+                    >
+                      {tarea.completed ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 text-teal-400" />
+                          <span className="text-teal-400">Hecho</span>
+                        </>
+                      ) : (
+                        <>
+                          <Circle className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Pendiente</span>
+                        </>
+                      )}
+                    </button>
                   </td>
 
-                  {/* Usuario asignado — nombre real, no ID */}
-                  <td className="px-4 py-3 text-slate-700 text-sm whitespace-nowrap">
-                    {resolverNombreUsuario(tarea.userId, usuarios)}
+                  <td className="hidden lg:table-cell px-4 py-3 text-sm whitespace-nowrap">
+                    {mapaUsuarios.get(tarea.userId) || `#${tarea.userId}`}
                   </td>
 
-                  {/* Fecha de creación */}
-                  <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                  <td className="hidden xl:table-cell px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                     {formatearFecha(tarea.createdAt)}
                   </td>
 
-                  {/* Acciones */}
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => alEditar(tarea)}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
-                        aria-label={`Editar ${tarea.todo}`}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => alEliminar(tarea.id)}
-                        className="text-xs font-medium text-red-500 hover:text-red-700 transition-colors"
-                        aria-label={`Eliminar ${tarea.todo}`}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
+                  <td className="px-4 py-3">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Abrir menú</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-popover border-border">
+                        <DropdownMenuItem onClick={() => onEditar(tarea)} className="cursor-pointer">
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => onEliminar(tarea)}
+                          className="text-destructive focus:text-destructive cursor-pointer"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
@@ -195,40 +188,31 @@ export function TablaTareas({
         </div>
       </div>
 
-      {/* ── Paginación ────────────────────────────────────────────────────── */}
-      {!cargando && tareas.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between px-1">
-          <p className="text-xs text-slate-500">
-            Mostrando{" "}
-            <span className="font-medium text-slate-700">{desde}–{hasta}</span>{" "}
-            de{" "}
-            <span className="font-medium text-slate-700">{tareas.length}</span> tareas
+      {totalPaginas > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Página {pagina + 1} de {totalPaginas}
           </p>
-
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPagina((p) => Math.max(0, p - 1))}
+              onClick={() => onCambiarPagina(pagina - 1)}
               disabled={pagina === 0}
-              aria-label="Página anterior"
+              className="cursor-pointer"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Anterior
             </Button>
-
-            <span className="text-xs text-slate-600">
-              Página <span className="font-medium">{pagina + 1}</span> de{" "}
-              <span className="font-medium">{totalPaginas}</span>
-            </span>
-
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))}
+              onClick={() => onCambiarPagina(pagina + 1)}
               disabled={pagina >= totalPaginas - 1}
-              aria-label="Página siguiente"
+              className="cursor-pointer"
             >
-              <ChevronRight className="h-4 w-4" />
+              Siguiente
+              <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           </div>
         </div>

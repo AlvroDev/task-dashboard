@@ -1,10 +1,6 @@
-// ─── CORRECCIÓN ───────────────────────────────────────────────────────────────
-// Antes: importaba useUpdateTodo desde "@/hooks/useTask"
-//        → el hook se renombró a useUpdateTask y se movió a @/hooks/useTareas
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { useState } from "react";
 import { useUpdateTask } from "@/hooks/useTareas";
+import { useUsers } from "@/hooks/useUsers";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +8,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { Task, Priority, TaskStatus } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -24,47 +29,50 @@ interface PropsEditTaskModal {
 
 export default function EditTaskModal({ isOpen, onOpenChange, task }: PropsEditTaskModal) {
   const { mutate, isPending } = useUpdateTask();
+  const { data: respuestaUsuarios, isLoading: cargandoUsuarios } = useUsers();
 
   const [formData, setFormData] = useState({
-    title: task.todo,
+    title:       task.todo,
     description: task.description,
-    priority: task.priority as Priority,
-    status: task.status as TaskStatus,
-    completed: task.completed,
-    userId: task.userId,
+    priority:    task.priority as Priority,
+    status:      task.status as TaskStatus,
+    userId:      String(task.userId),
   });
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  // ── Actualizar campo de texto / textarea ──────────────────────────────────
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    const target = e.currentTarget as HTMLInputElement;
-    const { name, type, value } = target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? target.checked : value,
-    }));
+    const { name, value } = e.currentTarget;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // ── Actualizar campo Select (shadcn) ──────────────────────────────────────
+  const handleSelectChange = (campo: keyof typeof formData, valor: string) => {
+    setFormData((prev) => ({ ...prev, [campo]: valor }));
+  };
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     mutate(
       {
         id: task.id,
         payload: {
-          todo: formData.title,
-          description: formData.description,
-          priority: formData.priority,
-          userId: Number(formData.userId),
-          completed: formData.status === "completed" || formData.completed,
-          createdAt: task.createdAt,
+          todo:        formData.title.trim(),
+          description: formData.description.trim(),
+          priority:    formData.priority,
+          userId:      Number(formData.userId),
+          completed:   formData.status === "completed",
+          createdAt:   task.createdAt,
         },
       },
       { onSuccess: () => onOpenChange(false) }
     );
   };
 
-  const CLASE_CAMPO =
-    "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:border-transparent disabled:opacity-50 transition-colors";
+  const CLASE_LABEL = "block text-sm font-medium text-gray-700 mb-1";
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -74,65 +82,93 @@ export default function EditTaskModal({ isOpen, onOpenChange, task }: PropsEditT
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+
           {/* Título */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
-            <input
-              type="text"
+            <label className={CLASE_LABEL}>Título</label>
+            <Input
               name="title"
               value={formData.title}
-              onChange={handleChange}
+              onChange={handleInputChange}
               disabled={isPending}
-              className={CLASE_CAMPO}
               required
             />
           </div>
 
           {/* Descripción */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-            <textarea
+            <label className={CLASE_LABEL}>Descripción</label>
+            <Textarea
               name="description"
               value={formData.description}
-              onChange={handleChange}
+              onChange={handleInputChange}
               rows={3}
               disabled={isPending}
-              className={`${CLASE_CAMPO} resize-none`}
+              className="resize-none"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             {/* Prioridad */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
-              <select
-                name="priority"
+              <label className={CLASE_LABEL}>Prioridad</label>
+              <Select
                 value={formData.priority}
-                onChange={handleChange}
+                onValueChange={(v) => handleSelectChange("priority", v)}
                 disabled={isPending}
-                className={CLASE_CAMPO}
               >
-                <option value="low">Baja</option>
-                <option value="medium">Media</option>
-                <option value="high">Alta</option>
-              </select>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Baja</SelectItem>
+                  <SelectItem value="medium">Media</SelectItem>
+                  <SelectItem value="high">Alta</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Estado */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-              <select
-                name="status"
+              <label className={CLASE_LABEL}>Estado</label>
+              <Select
                 value={formData.status}
-                onChange={handleChange}
+                onValueChange={(v) => handleSelectChange("status", v)}
                 disabled={isPending}
-                className={CLASE_CAMPO}
               >
-                <option value="pending">Pendiente</option>
-                <option value="in-progress">En progreso</option>
-                <option value="completed">Completada</option>
-              </select>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pendiente</SelectItem>
+                  <SelectItem value="in-progress">En progreso</SelectItem>
+                  <SelectItem value="completed">Completada</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+
+          {/* Usuario asignado */}
+          <div>
+            <label className={CLASE_LABEL}>Asignado a</label>
+            <Select
+              value={formData.userId}
+              onValueChange={(v) => handleSelectChange("userId", v)}
+              disabled={isPending || cargandoUsuarios}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={cargandoUsuarios ? "Cargando..." : "Seleccioná un usuario"}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {respuestaUsuarios?.users.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.firstName} {u.lastName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <DialogFooter className="pt-2">

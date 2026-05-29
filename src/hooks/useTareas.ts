@@ -1,15 +1,11 @@
-
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tasksService } from "@/modules/Tareas/tareas.service";
-import type { TaskFormValues } from "@/types";
+import type { Task, TaskFormValues } from "@/types";
 import type { Filters } from "@/types/filters";
 
-// ─── Clave base de caché ──────────────────────────────────────────────────────
-// Centralizar la key evita typos dispersos en los invalidateQueries.
 export const QUERY_KEY_TAREAS = ["todos"] as const;
 
-// ─── Query: obtener y filtrar tareas ─────────────────────────────────────────
+// ─── Query: listar y filtrar tareas ──────────────────────────────────────────
 export const useTasks = (filters: Filters) => {
   return useQuery({
     queryKey: [...QUERY_KEY_TAREAS, filters],
@@ -30,27 +26,40 @@ export const useTasks = (filters: Filters) => {
         return coincideBusqueda && coincideEstado && coincideUsuario;
       });
     },
-    // Mantiene datos anteriores visibles mientras recarga (ideal para paginación/filtros)
-    placeholderData: (datosAnteriores) => datosAnteriores,
+    placeholderData: (prev) => prev,
   });
 };
 
-// ─── Mutation: crear tarea ────────────────────────────────────────────────────
+// ─── Mutation: crear tarea (optimistic) ──────────────────────────────────────
+// DummyJSON no persiste datos reales. El optimistic update agrega la tarea
+// a la caché local inmediatamente para que aparezca en la tabla sin recargar.
 export const useCreateTask = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (nuevaTarea: TaskFormValues) => tasksService.create(nuevaTarea),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEY_TAREAS });
+
+    onSuccess: (tareaCreada) => {
+      // Inyectar la tarea devuelta por la API en todas las variantes de caché
+      // que coincidan con la queryKey base (independientemente de los filtros activos)
+      queryClient.setQueriesData<Task[]>(
+        { queryKey: QUERY_KEY_TAREAS },
+        (tareasActuales) => {
+          if (!tareasActuales) return [tareaCreada];
+          // Evitar duplicados si ya existe (doble render en StrictMode)
+          const existe = tareasActuales.some((t) => t.id === tareaCreada.id);
+          return existe ? tareasActuales : [tareaCreada, ...tareasActuales];
+        }
+      );
     },
+
     onError: (error: Error) => {
       console.error("Error al crear la tarea:", error.message);
     },
   });
 };
 
-// ─── Mutation: actualizar tarea ───────────────────────────────────────────────
+// ─── Mutation: actualizar tarea (optimistic) ─────────────────────────────────
 export const useUpdateTask = () => {
   const queryClient = useQueryClient();
 
@@ -62,19 +71,72 @@ export const useUpdateTask = () => {
       id: number;
       payload: Partial<TaskFormValues & { completed: boolean }>;
     }) => tasksService.update(id, payload),
-    onSuccess: () => {
+
+    // Optimistic update: modificar la caché antes de que responda la API
+    onMutate: async ({ id, payload }) => {
+      // Cancelar refetches en vuelo para no sobreescribir el optimistic update
+      await queryClient.cancelQueries({ queryKey: QUERY_KEY_TAREAS });
+
+      // Guardar snapshot para rollback en caso de error
+      const snapshot = queryClient.getQueriesData<Task[]>({ queryKey: QUERY_KEY_TAREAS });
+
+      // Aplicar el cambio localmente en todas las variantes de caché
+      queryClient.setQueriesData<Task[]>(
+        { queryKey: QUERY_KEY_TAREAS },
+        (tareasActuales) =>
+          tareasActuales?.map((t) =>
+            t.id === id ? { ...t, ...payload, todo: payload.todo ?? t.todo } : t
+          )
+      );
+
+      return { snapshot };
+    },
+
+    // Si la API falla, revertir al snapshot
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) {
+        context.snapshot.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+
+    // Siempre sincronizar con la API al terminar (éxito o error)
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY_TAREAS });
     },
   });
 };
 
-// ─── Mutation: eliminar tarea ─────────────────────────────────────────────────
+// ─── Mutation: eliminar tarea (optimistic) ───────────────────────────────────
 export const useDeleteTask = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: number) => tasksService.remove(id),
-    onSuccess: () => {
+
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: QUERY_KEY_TAREAS });
+
+      const snapshot = queryClient.getQueriesData<Task[]>({ queryKey: QUERY_KEY_TAREAS });
+
+      queryClient.setQueriesData<Task[]>(
+        { queryKey: QUERY_KEY_TAREAS },
+        (tareasActuales) => tareasActuales?.filter((t) => t.id !== id)
+      );
+
+      return { snapshot };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) {
+        context.snapshot.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY_TAREAS });
     },
   });

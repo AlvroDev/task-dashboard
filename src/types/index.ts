@@ -40,15 +40,3 @@ export interface UsersResponse {
   skip: number;
   limit: number;
 }
-
-export interface TaskFilters {
-  status: TaskStatus | "all";
-  priority: Priority | "all";
-  userId: number | "all";
-  search: string;
-}
-
-export interface PaginationParams {
-  limit: number;
-  skip: number;
-}

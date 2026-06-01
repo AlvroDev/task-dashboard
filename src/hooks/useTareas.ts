@@ -10,22 +10,32 @@ export const useTasks = (filters: Filters) => {
   return useQuery({
     queryKey: [...QUERY_KEY_TAREAS, filters],
     queryFn: async () => {
-      const response = await tasksService.getAll();
-      return response.todos.filter((task) => {
-        const coincideBusqueda =
-          filters.search === "" ||
-          task.todo.toLowerCase().includes(filters.search.toLowerCase()) ||
-          (task.description ?? "").toLowerCase().includes(filters.search.toLowerCase());
+  const response = await tasksService.getAll();
+  const prioridades = ["low", "medium", "high"] as const;
 
-        const coincideEstado =
-          filters.completed === null || task.completed === filters.completed;
+  const tareas = response.todos.map((task) => ({
+    ...task,
+    description: task.description ?? "",
+    priority: task.priority ?? prioridades[task.id % 3],
+    createdAt: task.createdAt ?? new Date(2026, task.id % 12, task.id % 28 + 1).toISOString(),
+    status: (task.completed ? "completed" : "pending") as "pending" | "in-progress" | "completed",
+  }));
 
-        const coincideUsuario =
-          filters.userId === null || task.userId === filters.userId;
+  return tareas.filter((task) => {
+    const coincideBusqueda =
+      filters.search === "" ||
+      task.todo.toLowerCase().includes(filters.search.toLowerCase()) ||
+      task.description.toLowerCase().includes(filters.search.toLowerCase());
 
-        return coincideBusqueda && coincideEstado && coincideUsuario;
-      });
-    },
+    const coincideEstado =
+      filters.completed === null || task.completed === filters.completed;
+
+    const coincideUsuario =
+      filters.userId === null || task.userId === filters.userId;
+
+    return coincideBusqueda && coincideEstado && coincideUsuario;
+  });
+},
     placeholderData: (prev) => prev,
   });
 };
@@ -39,16 +49,24 @@ export const useCreateTask = () => {
   return useMutation({
     mutationFn: (nuevaTarea: TaskFormValues) => tasksService.create(nuevaTarea),
 
-    onSuccess: (tareaCreada) => {
+    onSuccess: (tareaCreada, nuevaTarea) => {
+      const prioridades = ["low", "medium", "high"] as const;
+  const tareaCompleta = {
+    ...tareaCreada,
+    description: nuevaTarea.description ?? "",
+    priority: nuevaTarea.priority ?? prioridades[tareaCreada.id % 3],
+    createdAt: nuevaTarea.createdAt ?? new Date().toISOString(),
+    status: tareaCreada.completed ? "completed" : "pending" as "pending" | "in-progress" | "completed",
+  };
       // Inyectar la tarea devuelta por la API en todas las variantes de caché
       // que coincidan con la queryKey base (independientemente de los filtros activos)
       queryClient.setQueriesData<Task[]>(
         { queryKey: QUERY_KEY_TAREAS },
         (tareasActuales) => {
-          if (!tareasActuales) return [tareaCreada];
+          if (!tareasActuales) return [tareaCompleta];
           // Evitar duplicados si ya existe (doble render en StrictMode)
-          const existe = tareasActuales.some((t) => t.id === tareaCreada.id);
-          return existe ? tareasActuales : [tareaCreada, ...tareasActuales];
+          const existe = tareasActuales.some((t) => t.id === tareaCompleta.id);
+          return existe ? tareasActuales : [tareaCompleta, ...tareasActuales];
         }
       );
     },
